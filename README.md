@@ -49,6 +49,17 @@ The server listens on `0.0.0.0:8081` by default.
 
 - `GET /uploads/<filename>` - Retrieve an uploaded image
 
+## CLI Tool
+
+A Python CLI tool (`ulderive`) is provided for uploading images from the command line.
+
+```bash
+./ulderive image.png
+./ulderive photo1.jpg photo2.png -q    # quiet mode, URLs only
+```
+
+No external dependencies required (uses Python standard library).
+
 ## System Service
 
 An OpenRC init script is provided at `init.d/upderive` (primarily for Gentoo, works on most OpenRC-based systems).
