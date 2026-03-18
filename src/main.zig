@@ -24,9 +24,6 @@ fn parseMultipartContent(allocator: mem.Allocator, data: []const u8, boundary: [
     var start_marker: [128]u8 = undefined;
     const start_marker_len = try std.fmt.bufPrint(&start_marker, "--{s}", .{boundary});
 
-    var end_marker: [132]u8 = undefined;
-    const end_marker_buf = try std.fmt.bufPrint(&end_marker, "--{s}--", .{boundary});
-
     var permanent_upload = false;
     var file_data: ?[]const u8 = null;
     var content_type: []const u8 = "application/octet-stream";
@@ -38,51 +35,52 @@ fn parseMultipartContent(allocator: mem.Allocator, data: []const u8, boundary: [
 
         if (mem.startsWith(u8, line, start_marker_len)) {
             pos += newline_pos + 2;
-            var header_end_pos = pos;
-            while (header_end_pos < data.len) {
-                if (mem.startsWith(u8, data[header_end_pos..], "\r\n\r\n")) {
-                    break;
-                }
-                header_end_pos += 1;
-            }
 
-            const headers = data[pos .. header_end_pos + 2];
-            const name_start = mem.indexOf(u8, headers, "name=\"");
+            var header_end = pos;
+            while (header_end < data.len - 3) {
+                if (mem.startsWith(u8, data[header_end..], "\r\n\r\n")) break;
+                header_end += 1;
+            }
+            if (header_end >= data.len - 3) break;
+
+            const headers = data[pos .. header_end + 2];
+            const body_start = header_end + 4;
+
             var field_name: []const u8 = "";
+            const name_start = mem.indexOf(u8, headers, "name=\"");
             if (name_start) |ns| {
-                const name_value_start = ns + 6;
-                const name_end = mem.indexOf(u8, headers[name_value_start..], "\"") orelse 0;
-                field_name = headers[name_value_start .. name_value_start + name_end];
+                const val_start = ns + 6;
+                const val_end = mem.indexOf(u8, headers[val_start..], "\"") orelse 0;
+                field_name = headers[val_start .. val_start + val_end];
             }
 
             const ct_start = mem.indexOf(u8, headers, "Content-Type: ");
             if (ct_start) |cts| {
-                const ct_line_start = cts + 14;
-                const ct_line_end = mem.indexOf(u8, headers[ct_line_start..], "\r\n") orelse (headers.len - ct_line_start);
-                content_type = headers[ct_line_start .. ct_line_start + ct_line_end];
+                const ct_val_start = cts + 14;
+                const ct_val_end = mem.indexOf(u8, headers[ct_val_start..], "\r\n") orelse (headers.len - ct_val_start);
+                content_type = headers[ct_val_start .. ct_val_start + ct_val_end];
             }
 
-            pos = header_end_pos + 4;
-            var part_end = pos;
-            while (part_end < data.len - end_marker_buf.len) {
-                if (mem.startsWith(u8, data[part_end..], end_marker_buf)) {
-                    break;
+            var body_end = body_start;
+            while (body_end < data.len - start_marker_len.len - 2) {
+                if (mem.startsWith(u8, data[body_end..], "\r\n--")) {
+                    if (mem.startsWith(u8, data[body_end + 2 ..], start_marker_len)) {
+                        break;
+                    }
                 }
-                part_end += 1;
-            }
-            while (part_end > pos and (data[part_end - 1] == '\r' or data[part_end - 1] == '\n')) {
-                part_end -= 1;
+                body_end += 1;
             }
 
-            const part_content = data[pos..part_end];
+            const body_content = data[body_start..body_end];
 
             if (mem.eql(u8, field_name, "permanent")) {
-                permanent_upload = mem.indexOf(u8, part_content, "true") != null;
+                permanent_upload = mem.indexOf(u8, body_content, "true") != null;
             } else if (mem.eql(u8, field_name, "file")) {
-                file_data = part_content;
+                file_data = body_content;
             }
 
-            pos = part_end;
+            pos = body_end + 2;
+            continue;
         }
         pos += newline_pos + 2;
     }
