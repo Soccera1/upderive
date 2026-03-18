@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+
+name="upderive"
+description="UpDérive Image Upload Service"
+command="/usr/bin/upderive"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+command_user="upderive:upderive"
+directory="/var/lib/upderive"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    checkpath --directory --owner ${command_user} --mode 0755 /var/lib/upderive
+    checkpath --directory --owner ${command_user} --mode 0755 /var/lib/upderive/uploads
+}
+
+start() {
+    ebegin "Starting ${name}"
+    start-stop-daemon --start --background --make-pidfile --pidfile "${pidfile}" \
+        --user "${command_user}" --chdir "${directory}" --exec "${command}"
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    start-stop-daemon --stop --pidfile "${pidfile}"
+    eend $?
+}
