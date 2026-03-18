@@ -102,8 +102,13 @@ def main():
 Examples:
   upderive image.png
   upderive /path/to/photo.jpg
+  upderive -p artwork.png    # permanent upload
 
 Supported formats: JPEG, PNG, GIF, WebP, SVG
+
+Options:
+  -p, --permanent  Mark as permanent (please only use if needed > 30 days)
+  -q, --quiet      Only output URLs
         """,
     )
 
@@ -120,7 +125,7 @@ Supported formats: JPEG, PNG, GIF, WebP, SVG
         help="Only output URLs (one per line)",
     )
 
-parser.add_argument(
+    parser.add_argument(
         "-p",
         "--permanent",
         action="store_true",
