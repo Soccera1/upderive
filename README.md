@@ -72,6 +72,19 @@ rc-update add upderive default
 rc-service upderive start
 ```
 
+## Automatic Cleanup
+
+A cron job is provided to remove old uploads that haven't been modified in 30 days. Files with `-permanent` in the name are preserved.
+
+Installation:
+
+```bash
+cp cron/cleanup-uploads.sh /usr/local/bin/cleanup-uploads.sh
+cp cron/upderive-cleanup /etc/cron.d/upderive-cleanup
+```
+
+The cron job runs daily at 3:00 AM and logs to `/var/log/upderive-cleanup.log`.
+
 ## License
 
 GNU Affero General Public License v3.0 - see [LICENSE](LICENSE)
