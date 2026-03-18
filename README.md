@@ -2,7 +2,7 @@
 
 A minimal HTTP server for image uploads, written in Zig.
 
-##Features
+## Features
 
 - Single-binary HTTP server
 - Image upload via multipart form data
