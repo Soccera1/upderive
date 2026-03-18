@@ -1,0 +1,4 @@
+# Clean up old uploads that haven't been modified in 30 days
+# Excludes files with "-permanent" in the name
+
+0 3 * * * root /usr/local/bin/cleanup-uploads.sh >> /var/log/upderive-cleanup.log 2>&1
