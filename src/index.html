@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UpDérive - Image Upload</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        h1 { text-align: center; }
+        .upload-area { border: 2px dashed #ccc; border-radius: 10px; padding: 40px; text-align: center; cursor: pointer; }
+        .upload-area:hover { border-color: #666; }
+        .upload-area.dragover { border-color: #4a9eff; background: #f0f7ff; }
+        input[type="file"] { display: none; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; }
+        #preview { margin-top: 20px; }
+        #preview img { max-width: 100%; max-height: 300px; }
+        #result { margin-top: 20px; word-break: break-all; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>UpDérive</h1>
+    
+    <form id="upload-form">
+        <div class="upload-area" id="drop-zone">
+            <p>Drop image here or click to upload</p>
+            <input type="file" id="file-input" accept="image/*">
+        </div>
+        <div id="preview"></div>
+        <div style="text-align:center;margin-top:20px;">
+            <button type="submit">Upload</button>
+        </div>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const preview = document.getElementById('preview');
+        const form = document.getElementById('upload-form');
+        const result = document.getElementById('result');
+        let selectedFile = null;
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) {
+                handleFile(fileInput.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                result.innerHTML = '<p class="error">Please select an image file</p>';
+                return;
+            }
+            selectedFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!selectedFile) {
+                result.innerHTML = '<p class="error">Please select a file first</p>';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const url = `${window.location.origin}/uploads/${data.filename}`;
+                    result.innerHTML = `<p class="success">Uploaded successfully!</p><p>URL: <a href="${url}">${url}</a></p>`;
+                } else {
+                    result.innerHTML = '<p class="error">Upload failed</p>';
+                }
+            } catch (err) {
+                result.innerHTML = '<p class="error">Upload error: ' + err.message + '</p>';
+            }
+        });
+    </script>
+</body>
+</html>
