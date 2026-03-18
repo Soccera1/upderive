@@ -19,7 +19,7 @@ def detect_content_type(filepath):
     return content_type or "application/octet-stream"
 
 
-def create_multipart_form(filepath):
+def create_multipart_form(filepath, permanent=False):
     """Create multipart/form-data request body."""
     boundary = "----WebKitFormBoundary" + "".join(
         format(b, "02x") for b in os.urandom(16)
@@ -34,6 +34,10 @@ def create_multipart_form(filepath):
 
     body = (
         f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="permanent"\r\n'
+        f"\r\n"
+        f"{'true' if permanent else 'false'}\r\n"
+        f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
         f"Content-Type: {content_type}\r\n"
         f"\r\n"
@@ -45,7 +49,7 @@ def create_multipart_form(filepath):
     return body, boundary
 
 
-def upload_file(filepath):
+def upload_file(filepath, permanent=False):
     """Upload file to server and return response."""
     if not os.path.exists(filepath):
         print(f"Error: File not found: {filepath}", file=sys.stderr)
@@ -59,7 +63,7 @@ def upload_file(filepath):
         print(f"Supported types: {', '.join(allowed_extensions)}", file=sys.stderr)
         sys.exit(1)
 
-    body, boundary = create_multipart_form(filepath)
+    body, boundary = create_multipart_form(filepath, permanent)
 
     url = f"{HOST}/upload"
 
@@ -116,10 +120,17 @@ Supported formats: JPEG, PNG, GIF, WebP, SVG
         help="Only output URLs (one per line)",
     )
 
+parser.add_argument(
+        "-p",
+        "--permanent",
+        action="store_true",
+        help="Mark upload as permanent (please only use if needed for > 30 days; I have limited storage)",
+    )
+
     args = parser.parse_args()
 
     for filepath in args.file:
-        result = upload_file(filepath)
+        result = upload_file(filepath, args.permanent)
 
         if result.get("success"):
             url = f"{HOST}/uploads/{result['filename']}"

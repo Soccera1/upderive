@@ -27,6 +27,10 @@ fn parseMultipartContent(allocator: mem.Allocator, data: []const u8, boundary: [
     var end_marker: [132]u8 = undefined;
     const end_marker_buf = try std.fmt.bufPrint(&end_marker, "--{s}--", .{boundary});
 
+    var permanent_upload = false;
+    var file_data: ?[]const u8 = null;
+    var content_type: []const u8 = "application/octet-stream";
+
     var pos: usize = 0;
     while (pos < data.len) {
         const newline_pos = mem.indexOf(u8, data[pos..], "\r\n") orelse break;
@@ -43,45 +47,68 @@ fn parseMultipartContent(allocator: mem.Allocator, data: []const u8, boundary: [
             }
 
             const headers = data[pos .. header_end_pos + 2];
-            const content_type_start = mem.indexOf(u8, headers, "Content-Type: ");
-            var content_type: []const u8 = "application/octet-stream";
-            if (content_type_start) |cts| {
+            const name_start = mem.indexOf(u8, headers, "name=\"");
+            var field_name: []const u8 = "";
+            if (name_start) |ns| {
+                const name_value_start = ns + 6;
+                const name_end = mem.indexOf(u8, headers[name_value_start..], "\"") orelse 0;
+                field_name = headers[name_value_start .. name_value_start + name_end];
+            }
+
+            const ct_start = mem.indexOf(u8, headers, "Content-Type: ");
+            if (ct_start) |cts| {
                 const ct_line_start = cts + 14;
                 const ct_line_end = mem.indexOf(u8, headers[ct_line_start..], "\r\n") orelse (headers.len - ct_line_start);
                 content_type = headers[ct_line_start .. ct_line_start + ct_line_end];
             }
 
             pos = header_end_pos + 4;
-            var file_end = pos;
-            while (file_end < data.len - end_marker_buf.len) {
-                if (mem.startsWith(u8, data[file_end..], end_marker_buf)) {
+            var part_end = pos;
+            while (part_end < data.len - end_marker_buf.len) {
+                if (mem.startsWith(u8, data[part_end..], end_marker_buf)) {
                     break;
                 }
-                file_end += 1;
+                part_end += 1;
             }
-            while (file_end > pos and (data[file_end - 1] == '\r' or data[file_end - 1] == '\n')) {
-                file_end -= 1;
+            while (part_end > pos and (data[part_end - 1] == '\r' or data[part_end - 1] == '\n')) {
+                part_end -= 1;
             }
 
-            const file_data = data[pos..file_end];
-            if (file_data.len == 0) continue;
+            const part_content = data[pos..part_end];
 
-            const timestamp = std.time.timestamp();
-            const ext = getExtension(content_type);
-            const filename = try std.fmt.allocPrint(allocator, "{d}{s}", .{ timestamp, ext });
-            const filepath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ UploadsDir, filename });
+            if (mem.eql(u8, field_name, "permanent")) {
+                permanent_upload = mem.indexOf(u8, part_content, "true") != null;
+            } else if (mem.eql(u8, field_name, "file")) {
+                file_data = part_content;
+            }
 
-            const file = fs.cwd().createFile(filepath, .{}) catch |err| {
-                allocator.free(filename);
-                allocator.free(filepath);
-                return err;
-            };
-            defer file.close();
-            try file.writeAll(file_data);
-
-            return filename;
+            pos = part_end;
         }
         pos += newline_pos + 2;
+    }
+
+    if (file_data) |fd| {
+        if (fd.len == 0) return null;
+
+        const timestamp = std.time.timestamp();
+        const ext = getExtension(content_type);
+
+        const filename = if (permanent_upload)
+            try std.fmt.allocPrint(allocator, "{d}-permanent{s}", .{ timestamp, ext })
+        else
+            try std.fmt.allocPrint(allocator, "{d}{s}", .{ timestamp, ext });
+
+        const filepath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ UploadsDir, filename });
+
+        const file = fs.cwd().createFile(filepath, .{}) catch |err| {
+            allocator.free(filename);
+            allocator.free(filepath);
+            return err;
+        };
+        defer file.close();
+        try file.writeAll(fd);
+
+        return filename;
     }
     return null;
 }
