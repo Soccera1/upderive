@@ -28,6 +28,12 @@
             <input type="file" id="file-input" accept="image/*">
         </div>
         <div id="preview"></div>
+        <div style="margin-top:15px;">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="permanent" style="margin-top:3px;">
+                <span>Permanent upload <small style="color:#888;">(only use if needed for&gt; 30 days)</small><br><small style="color:#999;">Please don't use this unless necessary; I have limited storage and don't want to have to remove this feature.</small></span>
+            </label>
+        </div>
         <div style="text-align:center;margin-top:20px;">
             <button type="submit">Upload</button>
         </div>
@@ -90,6 +96,7 @@
 
             const formData = new FormData();
             formData.append('file', selectedFile);
+            formData.append('permanent', document.getElementById('permanent').checked ? 'true' : 'false');
 
             try {
                 const response = await fetch('/upload', {
