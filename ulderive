@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""CLI tool to upload images to upderive.soccera.uk"""
+
+import argparse
+import json
+import mimetypes
+import os
+import sys
+import urllib.request
+import urllib.error
+from pathlib import Path
+
+HOST = "https://upderive.soccera.uk"
+
+
+def detect_content_type(filepath):
+    """Detect content type from file extension."""
+    content_type, _ = mimetypes.guess_type(filepath)
+    return content_type or "application/octet-stream"
+
+
+def create_multipart_form(filepath):
+    """Create multipart/form-data request body."""
+    boundary = "----WebKitFormBoundary" + "".join(
+        format(b, "02x") for b in os.urandom(16)
+    )
+
+    filepath = Path(filepath)
+    filename = filepath.name
+    content_type = detect_content_type(filepath)
+
+    with open(filepath, "rb") as f:
+        file_data = f.read()
+
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: {content_type}\r\n"
+        f"\r\n"
+    ).encode("utf-8")
+
+    body += file_data
+    body += f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    return body, boundary
+
+
+def upload_file(filepath):
+    """Upload file to server and return response."""
+    if not os.path.exists(filepath):
+        print(f"Error: File not found: {filepath}", file=sys.stderr)
+        sys.exit(1)
+
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+    ext = Path(filepath).suffix.lower()
+
+    if ext not in allowed_extensions:
+        print(f"Error: Unsupported file type: {ext}", file=sys.stderr)
+        print(f"Supported types: {', '.join(allowed_extensions)}", file=sys.stderr)
+        sys.exit(1)
+
+    body, boundary = create_multipart_form(filepath)
+
+    url = f"{HOST}/upload"
+
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+    )
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("User-Agent", "UpDérive-CLI/1.0")
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            response_body = response.read().decode("utf-8")
+            return json.loads(response_body)
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8") if e.fp else ""
+        print(f"HTTP Error: {e.code} {e.reason}", file=sys.stderr)
+        if error_body:
+            print(f"Response: {error_body}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"Connection Error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError:
+        print("Error: Invalid response from server", file=sys.stderr)
+        sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="upderive",
+        description="Upload images to upderive.soccera.uk",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  upderive image.png
+  upderive /path/to/photo.jpg
+
+Supported formats: JPEG, PNG, GIF, WebP, SVG
+        """,
+    )
+
+    parser.add_argument(
+        "file",
+        nargs="+",
+        help="Image file(s) to upload",
+    )
+
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Only output URLs (one per line)",
+    )
+
+    args = parser.parse_args()
+
+    for filepath in args.file:
+        result = upload_file(filepath)
+
+        if result.get("success"):
+            url = f"{HOST}/uploads/{result['filename']}"
+            if args.quiet:
+                print(url)
+            else:
+                print(f"Uploaded: {url}")
+        else:
+            print(f"Error: Upload failed for {filepath}", file=sys.stderr)
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
